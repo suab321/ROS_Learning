@@ -4,6 +4,7 @@
 #include<iostream>
 
 #define PI 3.141592
+#define k 0.5
 
 ros::Publisher pub;
 ros::Subscriber sub;
@@ -13,16 +14,22 @@ using namespace std;
 
 void move(double,double,double);
 void rotate(double,double,double);
-void desired_location();
+void desired_angle();
+void goal_location();
+void pattern();
+void spiral_pattern();
+double getDistance(double,double,double,double);
 
 double degree_to_radian(double);
-double current_theta;
+turtlesim::Pose position_bot;
 
 geometry_msgs::Twist coor;
 
 
 void position(const turtlesim::Pose::ConstPtr &pos){
-    current_theta=degree_to_radian(pos->theta);
+     position_bot.x=pos->x;
+     position_bot.theta=pos->theta;
+     position_bot.y=pos->y;
 }
 
 
@@ -38,7 +45,7 @@ int main(int argv,char **argc){
     int t=1;
     int ch;
     while(t){
-        cout<<"1. linear motion 2.rotation 3.desired direction"<<endl;
+        cout<<"1. linear motion 2.rotation 3.desired direction 4.goto desired location 5.pattern 6.spiral pattern"<<endl;
          cin>>ch;
     switch(ch){
         case 1:
@@ -61,9 +68,16 @@ int main(int argv,char **argc){
             break;
 
 
-        case 3:desired_location();
+        case 3:desired_angle();
                 break;
+        case 4:goal_location();
+                break;
+        case 5:pattern();
+                break;
+
+        case 6:spiral_pattern();break;
             }
+
             coor.linear.x=0;
             coor.angular.z=0;
             cout<<"1. continue 0.exit"<<endl;
@@ -117,18 +131,95 @@ void rotate(double angular_speed,double angle,double direction){
     pub.publish(coor);
 }
 
-void desired_location(){
+void desired_angle(){
     double desired;
     cout<<"Enter the desired location"<<endl;
     cin>>desired;
     desired=degree_to_radian(desired);
-    double sub=desired-degree_to_radian(current_theta);
+    double sub=desired-degree_to_radian(position_bot.theta);
     coor.angular.z=20;
     cout<<sub<<endl;
     if(sub>0)
         rotate(degree_to_radian(20),abs(sub),1);
     else
         rotate(degree_to_radian(20),abs(sub),0);
+}
+
+void goal_location(){
+    double x,y;
+    cout<<"Enter the x coordinate"<<endl;
+    cin>>x;
+    cout<<"Enter the y-coordinate"<<endl;
+    cin>>y;
+    geometry_msgs::Twist target;
+    ros::Rate loop_rate(100);
+    do{
+        double velocity=k*getDistance(x,y,position_bot.x,position_bot.y);
+        target.linear.x=velocity;
+        target.linear.y=0;
+        target.linear.z=0;
+        target.angular.x=0;
+        target.angular.y=0;
+        target.angular.z=4*(atan2(y-position_bot.y,x-position_bot.x)-position_bot.theta);
+
+        pub.publish(target);
+
+        ros::spinOnce();
+        loop_rate.sleep();
+    }while(getDistance(x,y,position_bot.x,position_bot.y) > 0.01);
+    target.linear.x=0;
+    target.angular.z=0;
+    pub.publish(target);
+}
+
+//calculating distance in 2-D plane
+
+double getDistance(double x1,double y1,double x2,double y2){   
+     return sqrt(pow((x1-x2),2)+pow((y1-y2),2));
+}
+
+//bar graph like pattern
+void pattern(){
+    ros::Rate r(1);
+    move(2.0,4.0,1);
+    do{
+    double dir=1;
+    rotate(degree_to_radian(10),degree_to_radian(90),0);
+    move(3,4,1);
+    rotate(degree_to_radian(10),degree_to_radian(90),0);
+    move(1,1,1);
+    rotate(degree_to_radian(10),degree_to_radian(90),0);
+    move(3,4,1);
+    rotate(degree_to_radian(10),degree_to_radian(90),0);
+    if(dir)
+        move(1,1,0);
+    else
+        move(1,1,1);
+
+    ros::spinOnce();
+    r.sleep();
+    }while(position_bot.x < 9.5);
+}
+
+//spiral pattern
+void spiral_pattern(){
+    geometry_msgs::Twist spiral;
+    double an_speed=4.0;
+    double rk=0.5;
+    ros::Rate r(1);
+    do{
+        rk=rk+1.0;
+        spiral.linear.x=rk;
+        spiral.angular.z=an_speed;
+        pub.publish(spiral);
+
+        ros::spinOnce();
+        r.sleep();
+    }while(position_bot.x<10.5 && position_bot.y<10.5);
+
+    spiral.linear.x=0;
+    spiral.angular.z=0;
+    pub.publish(spiral);
 }
 
 //conversion
